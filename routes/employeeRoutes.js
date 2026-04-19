@@ -9,17 +9,11 @@ const {
   deleteEmployee
 } = require("../controllers/employeeController");
 
-// READ
+
 router.get("/", getEmployees);
 router.get("/:id", getEmployeeById);
-
-// CREATE
 router.post("/", addEmployee);
-
-// UPDATE
 router.put("/:id", updateEmployee);
-
-// DELETE
 router.delete("/:id", deleteEmployee);
 
 module.exports = router;
