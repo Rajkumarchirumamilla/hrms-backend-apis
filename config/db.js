@@ -6,7 +6,7 @@ const db = mysql.createConnection({
   password: "raj955009",
   database: "HRMS_DB",
   waitForConnections: true,
-  connectionLimit: 10,
+  connectionLimit: 15,
   queueLimit: 0
 });
 
