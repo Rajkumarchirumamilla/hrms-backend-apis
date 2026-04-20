@@ -1,112 +1,102 @@
-const db = require("../config/db");
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
-const crypto = require("crypto");
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const { v4: uuidv4 } = require('uuid');
+const db = require('../config/db');
 
-// Register
+
 exports.register = async (req, res) => {
   try {
-    const { id, name, email, password, role } = req.body;
+    const { mobilenumber, password, name, roleName } = req.body;
 
-    if (!email || !password || !name) {
-      return res.status(400).json({ message: "Required fields missing" });
+    if (!mobilenumber || !password || !name) {
+      return res.status(400).json({ message: 'All fields required' });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 12);
+    const hash = await bcrypt.hash(password, 10);
+    const userId = uuidv4();
 
-    db.query(
-      "INSERT INTO users (id, name, email, password, role) VALUES (?, ?, ?, ?, ?)",
-      [id, name, email, hashedPassword, role || "employee"],
-      (err) => {
-        if (err) {
-          if (err.code === "ER_DUP_ENTRY") {
-            return res.status(400).json({ message: "Email already exists" });
-          }
-          return res.status(500).json({ message: "Database error" });
-        }
-
-        res.status(200).json({ message: "User registered successfully" });
-      }
+    await db.execute(
+      'INSERT INTO users (id, mobilenumber, password, name, status) VALUES (?, ?, ?, ?, ?)',
+      [userId, mobilenumber, hash, name, 'Active']
+    );
+ 
+    const [roleRows] = await db.execute(
+      'SELECT id FROM roles WHERE name = ?',
+      [roleName || 'EMPLOYE']
     );
 
-  } catch (error) {
-    res.status(500).json({ message: "Server error" });
+    if (!roleRows.length) {
+      return res.status(400).json({ message: 'Role not found' });
+    }
+   
+    await db.execute(
+      'INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)',
+      [userId, roleRows[0].id]
+    );
+
+    res.status(200).json({
+      message: 'User created successfully',
+      userId
+    });
+
+  } catch (err) {
+    console.error('REGISTER ERROR:', err);
+    res.status(500).json({ error: err.message });
   }
 };
 
-// User Login
-exports.login = (req, res) => {
-  const { email, password } = req.body;
 
-  db.query("SELECT * FROM users WHERE email=?", [email], async (err, result) => {
-    if (err) return res.status(500).json({ message: "Database error" });
+exports.login = async (req, res) => {
+  try {
+    const { mobilenumber, password } = req.body;
 
-    if (result.length === 0) {
-      return res.status(400).json({ message: "Invalid credentials" });
+    if (!mobilenumber || !password) {
+      return res.status(400).json({ message: 'Mobile & password required' });
     }
 
-    const user = result[0];
+   
+    const [users] = await db.execute(
+      `SELECT u.id, u.name, u.password, u.status, r.name as role
+       FROM users u
+       JOIN user_roles ur ON u.id = ur.user_id
+       JOIN roles r ON r.id = ur.role_id
+       WHERE u.mobilenumber = ?`,
+      [mobilenumber]
+    );
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    if (!users.length) {
+      return res.status(404).json({ message: 'User not found' });
+    }
 
-    if (!isMatch) {
-      return res.status(400).json({ message: "Invalid credentials" });
+    const user = users[0];
+
+    if (user.status !== 'Active') {
+      return res.status(403).json({ message: 'User is blocked' });
+    }
+
+    const match = await bcrypt.compare(password, user.password);
+
+    if (!match) {
+      return res.status(401).json({ message: 'Wrong password' });
     }
 
     const token = jwt.sign(
-      { id: user.id, role: user.role },
+      {
+        id: user.id,
+        role: user.role,
+        name: user.name
+      },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES }
+      { expiresIn: '1d' }
     );
 
     res.json({
-      message: "Login successful",
+      message: 'Login successful',
       token
     });
-  });
-};
 
-// Forgot Password
-exports.forgotPassword = (req, res) => {
-  const { email } = req.body;
-
-  const resetToken = crypto.randomBytes(32).toString("hex");
-
-  db.query(
-    "UPDATE users SET reset_token=? WHERE email=?",
-    [resetToken, email],
-    (err, result) => {
-      if (err) return res.status(500).json({ message: "DB error" });
-
-      if (result.affectedRows === 0) {
-        return res.status(400).json({ message: "User not found" });
-      }
-
-      res.json({
-        message: "Reset token generated",
-        resetToken
-      });
-    }
-  );
-};
-
-// Reset Password
-exports.resetPassword = async (req, res) => {
-  const { token, newPassword } = req.body;
-
-  const hashedPassword = await bcrypt.hash(newPassword, 12);
-
-  db.query(
-    "UPDATE users SET password=?, reset_token=NULL WHERE reset_token=?",
-    [hashedPassword, token],
-    (err, result) => {
-      if (err) return res.status(500).json({ message: "DB error" });
-
-      if (result.affectedRows === 0) {
-        return res.status(400).json({ message: "Invalid token" });
-      }
-
-      res.json({ message: "Password reset successful" });
-    }
-  );
+  } catch (err) {
+    console.error('LOGIN ERROR:', err);
+    res.status(500).json({ error: err.message });
+  }
 };

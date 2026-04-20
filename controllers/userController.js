@@ -1,61 +1,32 @@
-const db = require("../config/db");
-const bcrypt = require("bcrypt");
+const db = require('../config/db');
 
-// Get Profile
-exports.getProfile = (req, res) => {
-  const userId = req.user.id;
-
-  db.query(
-    "SELECT id, name, email, role FROM users WHERE id=?",
-    [userId],
-    (err, result) => {
-      if (err) return res.status(500).json({ message: "DB error" });
-
-      res.json(result[0]);
-    }
+exports.getAllUsers = async (req, res) => {
+  const [users] = await db.execute(
+    'SELECT id, mobilenumber, status FROM users'
   );
+  res.json(users);
 };
 
-// Update Profile
-exports.updateProfile = (req, res) => {
-  const { name, email } = req.body;
-
-  db.query(
-    "UPDATE users SET name=?, email=? WHERE id=?",
-    [name, email, req.user.id],
-    (err) => {
-      if (err) return res.status(500).json({ message: "DB error" });
-
-      res.json({ message: "Profile updated" });
-    }
+exports.getUser = async (req, res) => {
+  const [user] = await db.execute(
+    'SELECT id, mobilenumber, status FROM users WHERE id=?',
+    [req.params.id]
   );
+  res.json(user[0]);
 };
 
-// Change Password
-exports.changePassword = async (req, res) => {
-  const { oldPassword, newPassword } = req.body;
+exports.updateUser = async (req, res) => {
+  const { status } = req.body;
 
-  db.query(
-    "SELECT password FROM users WHERE id=?",
-    [req.user.id],
-    async (err, result) => {
-      const user = result[0];
-
-      const isMatch = await bcrypt.compare(oldPassword, user.password);
-
-      if (!isMatch) {
-        return res.status(400).json({ message: "Old password incorrect" });
-      }
-
-      const hashed = await bcrypt.hash(newPassword, 12);
-
-      db.query(
-        "UPDATE users SET password=? WHERE id=?",
-        [hashed, req.user.id],
-        () => {
-          res.json({ message: "Password updated" });
-        }
-      );
-    }
+  await db.execute(
+    'UPDATE users SET status=? WHERE id=?',
+    [status, req.params.id]
   );
+
+  res.json({ message: 'Sucessfully Updated' });
+};
+
+exports.deleteUser = async (req, res) => {
+  await db.execute('DELETE FROM users WHERE id=?', [req.params.id]);
+  res.json({ message: 'Deleted' });
 };
