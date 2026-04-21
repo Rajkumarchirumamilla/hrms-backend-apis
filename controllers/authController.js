@@ -2,10 +2,12 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../config/db');
+const { sendMessage } = require('../utils/sendMessage');
 
 
 exports.register = async (req, res) => {
   try {
+    console.log('register')
     const { mobilenumber, password, name, roleName } = req.body;
 
     if (!mobilenumber || !password || !name) {
@@ -13,17 +15,22 @@ exports.register = async (req, res) => {
     }
 
     const hash = await bcrypt.hash(password, 10);
-    const userId = uuidv4();
+    // const userId = uuidv4();
 
-    await db.execute(
-      'INSERT INTO users (id, mobilenumber, password, name, status) VALUES (?, ?, ?, ?, ?)',
-      [userId, mobilenumber, hash, name, 'Active']
+      const [result] =   await db.execute(
+      'INSERT INTO users ( mobilenumber, password, name, status) VALUES ( ?, ?, ?, ?)',
+      [ mobilenumber, hash, name, 'Active']
     );
  
+    const userId = result.insertId;
+
+
     const [roleRows] = await db.execute(
       'SELECT id FROM roles WHERE name = ?',
       [roleName || 'EMPLOYE']
     );
+
+    console.log([roleRows])
 
     if (!roleRows.length) {
       return res.status(400).json({ message: 'Role not found' });
@@ -34,9 +41,20 @@ exports.register = async (req, res) => {
       [userId, roleRows[0].id]
     );
 
-    res.status(200).json({
-      message: 'User created successfully',
-      userId
+    const token = jwt.sign(
+  { userId, mobilenumber },
+  "your_secret_key", // ⚠️ move to .env later
+  { expiresIn: "7d" }
+);
+
+  res.status(200).json({
+  message: 'User created successfully',
+      token,
+      user: {
+        id: userId,
+        name,
+        mobilenumber,
+      }
     });
 
   } catch (err) {
@@ -82,7 +100,7 @@ exports.login = async (req, res) => {
 
     const token = jwt.sign(
       {
-        id: user.id,
+        id: user.id,  
         role: user.role,
         name: user.name
       },
@@ -100,3 +118,108 @@ exports.login = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+
+exports.sendOtp = async (req, res) => {
+  try {
+    const { mobilenumber } = req.body;
+
+    if (!mobilenumber) {
+      return res.status(400).json({ message: "Mobile number required" });
+    }
+
+    // Check user exists
+    const [users] = await db.execute(
+      "SELECT id FROM users WHERE mobilenumber = ?",
+      [mobilenumber]
+    );
+
+    if (!users.length) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // ✅ Generate OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+    // Save OTP
+    await db.execute(
+      "INSERT INTO otp_verification (mobilenumber, otp, expires_at) VALUES (?, ?, ?)",
+      [mobilenumber, otp, expiresAt]
+    );
+
+    // ✅ SEND SMS USING YOUR EXISTING SERVICE
+    await sendMessage(
+      { mobile: mobilenumber },
+      "forgot-password",
+      { otp }
+    );
+
+    res.json({
+      message: "OTP sent successfully",
+    });
+
+  } catch (err) {
+    console.error("SEND OTP ERROR:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+
+exports.resetPassword = async (req, res) => {
+  try {
+    const { mobilenumber, otp, newPassword } = req.body;
+
+    if (!mobilenumber || !otp || !newPassword) {
+      return res.status(400).json({ message: "All fields required" });
+    }
+
+    // ✅ Get latest OTP
+    const [rows] = await db.execute(
+      "SELECT * FROM otp_verification WHERE mobilenumber = ? ORDER BY id DESC LIMIT 1",
+      [mobilenumber]
+    );
+
+    if (!rows.length) {
+      return res.status(400).json({ message: "OTP not found" });
+    }
+
+    const record = rows[0];
+
+    // ✅ Check expiry
+    if (new Date() > new Date(record.expires_at)) {
+      return res.status(400).json({ message: "OTP expired" });
+    }
+
+    // ✅ Check OTP match
+    if (record.otp !== otp) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
+
+    // ✅ Hash new password
+    const hash = await bcrypt.hash(newPassword, 10);
+
+    // ✅ Update password
+    await db.execute(
+      "UPDATE users SET password = ? WHERE mobilenumber = ?",
+      [hash, mobilenumber]
+    );
+
+    // ✅ Delete OTP after use (VERY IMPORTANT)
+    await db.execute(
+      "DELETE FROM otp_verification WHERE mobilenumber = ?",
+      [mobilenumber]
+    );
+
+    res.json({
+      message: "Password reset successful",
+    });
+
+  } catch (err) {
+    console.error("RESET PASSWORD ERROR:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+
