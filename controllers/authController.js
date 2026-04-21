@@ -9,7 +9,7 @@ exports.register = async (req, res) => {
     const { mobilenumber, password, name, roleName } = req.body;
 
     if (!mobilenumber || !password || !name) {
-      return res.status(400).json({ message: 'All fields required' });
+      return res.status(400).json({ message: 'All fields required' }); 
     }
 
     const hash = await bcrypt.hash(password, 10);
