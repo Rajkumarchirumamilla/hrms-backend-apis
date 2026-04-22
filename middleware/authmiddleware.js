@@ -9,7 +9,7 @@ module.exports.auth = (req, res, next) => {
     }
 
     if (token.startsWith("Bearer ")) {
-      token = token.slice(7);
+      token = token.slice(7); 
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
