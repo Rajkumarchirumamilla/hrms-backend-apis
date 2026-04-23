@@ -35,7 +35,8 @@ exports.register = async (req, res) => {
     if (!roleRows.length) {
       return res.status(400).json({ message: 'Role not found' });
     }
-   
+  
+
     await db.execute(
       'INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)',
       [userId, roleRows[0].id]
@@ -221,5 +222,109 @@ exports.resetPassword = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+exports.getProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // ✅ Extract token from header
+    const token = req.headers.authorization?.split(" ")[1];
+
+    const [users] = await db.execute(
+      `SELECT u.id, u.name, u.mobilenumber, u.status, r.name as role
+       FROM users u
+       JOIN user_roles ur ON u.id = ur.user_id
+       JOIN roles r ON r.id = ur.role_id
+       WHERE u.id = ?`,
+      [userId]
+    );
+
+    if (!users.length) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json({
+      user: users[0],
+      token: token   // ✅ send same token
+    });
+
+  } catch (err) {
+    console.error("GET PROFILE ERROR:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
 
 
+
+exports.getDashboardStats = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    console.log("userid", userId);
+
+    // ✅ Step 1: Get employee_id
+    const [[emp]] = await db.execute(
+      "SELECT id FROM employees WHERE user_id = ?",
+      [userId]
+    );
+
+    if (!emp) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
+    const employeeId = emp.id;
+
+    // 1. Attendance %
+    const [[attendance]] = await db.execute(`
+      SELECT 
+        IFNULL((SUM(status = 'Present') / NULLIF(COUNT(*), 0)) * 100, 0) as percentage
+      FROM attendance
+      WHERE employee_id = ?
+    `, [employeeId]);
+
+    // 2. Leave Used
+    const [[leave]] = await db.execute(`
+      SELECT 
+        IFNULL(SUM(DATEDIFF(to_date, from_date) + 1), 0) as used
+      FROM leaves
+      WHERE employee_id = ? AND status = 'Approved'
+    `, [employeeId]);
+
+    const totalLeaves = 15;
+
+    // 3. Salary (FIXED)
+    const [[salary]] = await db.execute(`
+      SELECT amount 
+      FROM salary 
+      WHERE employee_id = ?
+      ORDER BY year DESC, month DESC
+      LIMIT 1
+    `, [employeeId]);
+
+    // 4. Work Hours
+    const [[workHours]] = await db.execute(`
+      SELECT IFNULL(SUM(working_hours), 0) as total
+      FROM attendance
+      WHERE employee_id = ?
+    `, [employeeId]);
+
+    const totalHours = workHours.total || 0;
+
+    let workStatus = "On Track";
+    if (totalHours < 160) workStatus = "Below Target";
+    if (totalHours > 200) workStatus = "Overtime";
+
+    res.json({
+      attendance_percentage: attendance.percentage || 0,
+      attendance_trend: 2.5,
+      leave_balance_days: totalLeaves - (leave.used || 0),
+      leave_used: leave.used || 0,
+      salary_amount: salary?.amount || 0,
+      salary_trend: 5.2,
+      work_hours_total: totalHours,
+      work_hours_status: workStatus,
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+};

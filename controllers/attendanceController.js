@@ -17,7 +17,15 @@ function formatTime(seconds) {
 
 exports.checkIn = async (req, res) => {
   try {
-    const { employee_id, lat, lng } = req.body;
+   const userId = req.user.id;
+   console.log('checkin')
+
+const [[emp]] = await db.execute(
+        "SELECT id FROM employees WHERE user_id = ?",
+        [userId]
+      );
+
+      const employee_id = emp.id;
 
     const imageUrl = req.file ? await uploadToS3(req.file) : null;
 
