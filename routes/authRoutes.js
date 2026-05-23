@@ -9,4 +9,8 @@ router.post("/reset-password", auth.resetPassword);
 router.get("/profile", verifyToken, auth.getProfile);
 router.get("/dashboard-stats",verifyToken, auth.getDashboardStats);
 
+router.put('/update', verifyToken, auth.updateProfile);
+router.put('/change-password', verifyToken, auth.changePassword);
+router.post('/upload-image', verifyToken, auth.uploadProfileImage);
+
 module.exports = router;

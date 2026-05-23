@@ -1,3 +1,6 @@
+const db = require('../config/db');
+
+
 exports.addDepartment = (req, res) => {
   const { name, status } = req.body;
 
@@ -21,17 +24,29 @@ exports.addDepartment = (req, res) => {
 
 
 
-exports.getDepartments = (req, res) => {
-  db.query(
-    `SELECT * FROM department WHERE status = 1`,
-    (err, results) => {
-      if (err) return res.status(500).json(err);
+exports.getDepartments = async (req, res) => {
+  try {
 
-      res.json(results);
-    }
-  );
+    const [results] = await db.query(
+      `SELECT * FROM departments WHERE status = 1`
+    );
+
+    res.status(200).json({
+      success: true,
+      data: results,
+    });
+
+  } catch (err) {
+
+    console.log(err);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch departments",
+      error: err.message,
+    });
+  }
 };
-
 
 
 exports.updateDepartment = (req, res) => {
@@ -63,3 +78,4 @@ exports.deleteDepartment = (req, res) => {
     }
   );
 };
+

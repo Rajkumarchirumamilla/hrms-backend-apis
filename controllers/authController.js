@@ -5,6 +5,26 @@ const db = require('../config/db');
 const { sendMessage } = require('../utils/sendMessage');
 
 
+const formatDate = (date) => {
+  if (!date) return null;
+  return new Date(date).toLocaleDateString('en-US', { 
+    year: 'numeric', 
+    month: 'short', 
+    day: 'numeric' 
+  });
+};
+
+// Helper: Format time
+const formatTime12Hour = (time) => {
+  if (!time) return null;
+  const [hours, minutes] = time.split(':');
+  const h = parseInt(hours);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  return `${h12}:${minutes} ${ampm}`;
+};
+
+
 exports.register = async (req, res) => {
   try {
     console.log('register')
@@ -70,53 +90,136 @@ exports.login = async (req, res) => {
     const { mobilenumber, password } = req.body;
 
     if (!mobilenumber || !password) {
-      return res.status(400).json({ message: 'Mobile & password required' });
+      return res.status(400).json({
+        message: "Mobile & password required"
+      });
     }
 
-   
     const [users] = await db.execute(
-      `SELECT u.id, u.name, u.password, u.status, r.name as role
-       FROM users u
-       JOIN user_roles ur ON u.id = ur.user_id
-       JOIN roles r ON r.id = ur.role_id
-       WHERE u.mobilenumber = ?`,
+      `
+      SELECT 
+        u.id,
+        u.name,
+        u.email,
+        u.mobilenumber,
+        u.password,
+        u.status,
+
+        r.name AS role,
+
+        e.organization_id,
+        e.address,
+        e.employee_code,
+        e.joining_date,
+        e.employment_type,
+        e.work_location,
+
+        d.name AS department,
+        des.name AS designation,
+
+        manager.name AS manager
+
+      FROM users u
+
+      JOIN user_roles ur
+      ON u.id = ur.user_id
+
+      JOIN roles r
+      ON r.id = ur.role_id
+
+      LEFT JOIN employees e
+      ON e.user_id = u.id
+
+      LEFT JOIN departments d
+      ON d.id = e.department_id
+
+      LEFT JOIN designations des
+      ON des.id = e.designation_id
+
+      LEFT JOIN employees rm
+      ON rm.id = e.reporting_manager_id
+
+      LEFT JOIN users manager
+      ON manager.id = rm.user_id
+
+      WHERE u.mobilenumber = ?
+      `,
       [mobilenumber]
     );
 
     if (!users.length) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({
+        message: "User not found"
+      });
     }
 
     const user = users[0];
 
-    if (user.status !== 'Active') {
-      return res.status(403).json({ message: 'User is blocked' });
+    if (user.status !== "Active") {
+      return res.status(403).json({
+        message: "User is blocked"
+      });
     }
 
-    const match = await bcrypt.compare(password, user.password);
+    const match = await bcrypt.compare(
+      password,
+      user.password
+    );
 
     if (!match) {
-      return res.status(401).json({ message: 'Wrong password' });
+      return res.status(401).json({
+        message: "Wrong password"
+      });
     }
 
     const token = jwt.sign(
       {
-        id: user.id,  
+        id: user.id,
         role: user.role,
         name: user.name
       },
       process.env.JWT_SECRET,
-      { expiresIn: '1d' }
+      {
+        expiresIn: "1d"
+      }
     );
 
     res.json({
-      message: 'Login successful',
+      message: "Login successful",
+
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        mobilenumber: user.mobilenumber,
+        status: user.status,
+        role: user.role,
+        address: user.address
+      },
+
+      employee: {
+        department: user.department,
+        designation: user.designation,
+        employeeId: user.employee_code,
+        organization_id: user.organization_id,
+        joiningDate: user.joining_date,
+        manager: user.manager,
+        employmentType: user.employment_type,
+        workLocation: user.work_location
+      },
+
       token
     });
 
   } catch (err) {
-    console.error('LOGIN ERROR:', err);
-    res.status(500).json({ error: err.message });
+    console.error(
+      "LOGIN ERROR:",
+      err
+    );
+
+    res.status(500).json({
+      error: err.message
+    });
   }
 };
 
@@ -226,105 +329,429 @@ exports.getProfile = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // ✅ Extract token from header
     const token = req.headers.authorization?.split(" ")[1];
 
-    const [users] = await db.execute(
-      `SELECT u.id, u.name, u.mobilenumber, u.status, r.name as role
-       FROM users u
-       JOIN user_roles ur ON u.id = ur.user_id
-       JOIN roles r ON r.id = ur.role_id
-       WHERE u.id = ?`,
-      [userId]
-    );
+   const [users] = await db.execute(
+  `
+  SELECT 
+    u.id,
+    u.name,
+    u.email,
+    u.mobilenumber,
+    u.status,
+
+    r.name AS role,
+
+    e.organization_id,
+    e.address,
+    e.employee_code,
+    e.joining_date,
+    e.employment_type,
+    e.work_location,
+
+    d.name AS department,
+    des.name AS designation,
+
+    manager.name AS manager
+
+  FROM users u
+
+  JOIN user_roles ur 
+  ON u.id = ur.user_id
+
+  JOIN roles r 
+  ON r.id = ur.role_id
+
+  LEFT JOIN employees e 
+  ON e.user_id = u.id
+
+  LEFT JOIN departments d
+  ON d.id = e.department_id
+
+  LEFT JOIN designations des
+  ON des.id = e.designation_id
+
+  LEFT JOIN employees rm
+  ON rm.id = e.reporting_manager_id
+
+  LEFT JOIN users manager
+  ON manager.id = rm.user_id
+
+  WHERE u.id = ?
+  `,
+  [userId]
+);
 
     if (!users.length) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({
+        message: "User not found"
+      });
     }
 
-    res.json({
-      user: users[0],
-      token: token   // ✅ send same token
-    });
+    const user = users[0];
 
+  res.json({
+  user: {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    mobilenumber: user.mobilenumber,
+    status: user.status,
+    role: user.role,
+    address: user.address,
+  },
+
+  employee: {
+    department: user.department,
+    designation: user.designation,
+    employeeId: user.employee_code,
+    organization_id: user.organization_id,
+    joiningDate: user.joining_date,
+    manager: user.manager,
+    employmentType: user.employment_type,
+    workLocation: user.work_location,
+  },
+
+  token
+});
   } catch (err) {
     console.error("GET PROFILE ERROR:", err);
-    res.status(500).json({ error: err.message });
+
+    res.status(500).json({
+      error: err.message
+    });
   }
-};
-
-
+};    
 
 exports.getDashboardStats = async (req, res) => {
   try {
     const userId = req.user.id;
-    console.log("userid", userId);
 
-    // ✅ Step 1: Get employee_id
+    // Get employee_id
     const [[emp]] = await db.execute(
       "SELECT id FROM employees WHERE user_id = ?",
       [userId]
     );
 
     if (!emp) {
-      return res.status(404).json({ message: "Employee not found" });
+      return res.status(404).json({
+        message: "Employee not found"
+      });
     }
 
     const employeeId = emp.id;
 
-    // 1. Attendance %
+    // ================================
+    // 1. Attendance Percentage
+    // ================================
     const [[attendance]] = await db.execute(`
+  SELECT 
+    ROUND(
+      (COUNT(*) / 30) * 100,
+      2
+    ) AS percentage
+  FROM attendance
+  WHERE employee_id = ?
+  AND LOWER(status) = 'completed'
+`, [employeeId]);
+
+    // ================================
+    // 2. Leave Balances
+    // ================================
+    const [[leaveBalance]] = await db.execute(`
       SELECT 
-        IFNULL((SUM(status = 'Present') / NULLIF(COUNT(*), 0)) * 100, 0) as percentage
-      FROM attendance
-      WHERE employee_id = ?
-    `, [employeeId]);
+        casual_used,
+        casual_total,
+        sick_used,
+        sick_total,
+        annual_used,
+        annual_total
+      FROM leave_balances
+      WHERE user_id = ?
+    `, [userId]);
 
-    // 2. Leave Used
-    const [[leave]] = await db.execute(`
-      SELECT 
-        IFNULL(SUM(DATEDIFF(to_date, from_date) + 1), 0) as used
-      FROM leaves
-      WHERE employee_id = ? AND status = 'Approved'
-    `, [employeeId]);
+   const totalLeaves = Number(leaveBalance?.annual_total || 0);
 
-    const totalLeaves = 15;
+const usedLeaves = Number(leaveBalance?.annual_used || 0);
 
-    // 3. Salary (FIXED)
+const remainingLeaves = totalLeaves - usedLeaves;
+
+    // ================================
+    // 3. Salary
+    // ================================
     const [[salary]] = await db.execute(`
-      SELECT amount 
-      FROM salary 
+      SELECT amount
+      FROM salary
       WHERE employee_id = ?
       ORDER BY year DESC, month DESC
       LIMIT 1
     `, [employeeId]);
 
+    const monthlySalary = Number(salary?.amount || 0);
+
+    // ================================
     // 4. Work Hours
+    // ================================
     const [[workHours]] = await db.execute(`
-      SELECT IFNULL(SUM(working_hours), 0) as total
+      SELECT IFNULL(SUM(working_hours), 0) AS total
       FROM attendance
       WHERE employee_id = ?
     `, [employeeId]);
 
-    const totalHours = workHours.total || 0;
+    const totalSeconds = Number(workHours.total || 0);
 
+    const totalHours = totalSeconds / 3600;
+
+    const workedDays = totalHours / 8;
+
+    // ================================
+    // 5. Earned Salary
+    // ================================
+    const workingDaysInMonth = 30;
+
+    const dailySalary = monthlySalary / workingDaysInMonth;
+
+    const earnedSalary = workedDays * dailySalary;
+
+    // ================================
+    // 6. Work Status
+    // ================================
     let workStatus = "On Track";
-    if (totalHours < 160) workStatus = "Below Target";
-    if (totalHours > 200) workStatus = "Overtime";
 
+    if (workedDays < 20) {
+      workStatus = "Below Target";
+    } else if (workedDays > 26) {
+      workStatus = "Overtime";
+    }
+
+    // ================================
+    // Final Response
+    // ================================
     res.json({
-      attendance_percentage: attendance.percentage || 0,
-      attendance_trend: 2.5,
-      leave_balance_days: totalLeaves - (leave.used || 0),
-      leave_used: leave.used || 0,
-      salary_amount: salary?.amount || 0,
-      salary_trend: 5.2,
-      work_hours_total: totalHours,
+      attendance_percentage: Number(attendance?.percentage || 0),
+
+      attendance_trend: 0,
+
+      leave_balance_days: remainingLeaves,
+
+      leave_used: usedLeaves,
+
+      monthly_salary: monthlySalary,
+
+      salary_amount: earnedSalary.toFixed(2),
+
+      salary_trend: 0,
+
+      worked_days: workedDays.toFixed(2),
+
+      work_hours_total: totalSeconds,
+
       work_hours_status: workStatus,
     });
 
   } catch (err) {
-    console.error(err);
+    console.error("Dashboard error:", err);
+
+    res.status(500).json({
+      error: err.message
+    });
+  }
+};
+
+
+// Get complete profile data
+// exports.getProfile = async (req, res) => {
+//   try {
+//     const userId = req.user.id;
+
+//     // Get user with role
+//     const [[user]] = await db.execute(
+//       `SELECT u.id, u.name, u.mobilenumber as phone, u.email, u.status, 
+//               u.created_at as joining_date, r.name as role
+//        FROM users u
+//        LEFT JOIN user_roles ur ON u.id = ur.user_id
+//        LEFT JOIN roles r ON r.id = ur.role_id
+//        WHERE u.id = ?`,
+//       [userId]
+//     );
+
+//     if (!user) {
+//       return res.status(404).json({ message: "User not found" });
+//     }
+
+//     // Get employee details
+//     const [[employee]] = await db.execute(
+//       `SELECT e.id as employee_id, e.department, e.designation, 
+//               e.office_id, e.manager_id, e.address, e.profile_image
+//        FROM employees e
+//        WHERE e.user_id = ?`,
+//       [userId]
+//     );
+
+//     // Get manager name if exists
+//     let managerName = null;
+//     if (employee?.manager_id) {
+//       const [[manager]] = await db.execute(
+//         `SELECT name FROM users WHERE id = ?`,
+//         [employee.manager_id]
+//       );
+//       managerName = manager?.name || null;
+//     }
+
+//     // Get quick stats
+//     const [[stats]] = await db.execute(
+//       `SELECT 
+//         COUNT(DISTINCT p.id) as total_projects,
+//         COUNT(DISTINCT t.id) as total_tasks,
+//         IFNULL(AVG(pr.rating), 0) as avg_rating
+//        FROM employees e
+//        LEFT JOIN projects p ON FIND_IN_SET(e.id, p.team_members)
+//        LEFT JOIN tasks t ON t.assigned_to = e.id
+//        LEFT JOIN performance_reviews pr ON pr.employee_id = e.id
+//        WHERE e.user_id = ?`,
+//       [userId]
+//     );
+
+//     // Get attendance summary for current month
+//     const now = new Date();
+//     const [[attendance]] = await db.execute(
+//       `SELECT 
+//         COUNT(*) as total_days,
+//         SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present_days,
+//         SUM(CASE WHEN status = 'late' THEN 1 ELSE 0 END) as late_days,
+//         SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent_days
+//        FROM attendance 
+//        WHERE employee_id = ? 
+//        AND MONTH(attendance_date) = ? 
+//        AND YEAR(attendance_date) = ?`,
+//       [employee?.id, now.getMonth() + 1, now.getFullYear()]
+//     );
+
+//     res.json({
+//       user: {
+//         id: user.id,
+//         name: user.name,
+//         email: user.email || user.phone + '@company.com',
+//         phone: user.phone,
+//         role: user.role || 'Employee',
+//         status: user.status,
+//         joiningDate: formatDate(user.joining_date),
+//         avatar: employee?.profile_image || null,
+//       },
+//       employee: employee ? {
+//         employeeId: `EMP-${String(employee.employee_id).padStart(6, '0')}`,
+//         department: employee.department || 'Not Assigned',
+//         designation: employee.designation || 'Employee',
+//         officeId: employee.office_id,
+//         address: employee.address || 'Not Provided',
+//         manager: managerName || 'Not Assigned',
+//       } : null,
+//       stats: {
+//         projects: stats?.total_projects || 0,
+//         tasks: stats?.total_tasks || 0,
+//         rating: parseFloat(stats?.avg_rating || 0).toFixed(1),
+//         attendance: {
+//           present: attendance?.present_days || 0,
+//           late: attendance?.late_days || 0,
+//           absent: attendance?.absent_days || 0,
+//           total: attendance?.total_days || 0,
+//         }
+//       }
+//     });
+
+//   } catch (err) {
+//     console.error("GET PROFILE ERROR:", err);
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
+// Update profile
+exports.updateProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { name, email, address, phone } = req.body;
+    console.log('update prof')
+    // Update users table
+    await db.execute(
+      `UPDATE users SET name = ?, email = ?, mobilenumber = ? WHERE id = ?`,
+      [name, email, phone, userId]
+    );
+
+    // Update employees table
+    await db.execute(
+      `UPDATE employees SET address = ? WHERE user_id = ?`,
+      [address, userId]
+    );
+
+    res.json({ message: "Profile updated successfully" });
+
+  } catch (err) {
+    console.error("UPDATE PROFILE ERROR:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Change password
+exports.changePassword = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { currentPassword, newPassword } = req.body;
+
+    const [[user]] = await db.execute(
+      `SELECT password FROM users WHERE id = ?`,
+      [userId]
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const bcrypt = require('bcrypt');
+    const match = await bcrypt.compare(currentPassword, user.password);
+
+    if (!match) {
+      return res.status(401).json({ message: "Current password is incorrect" });
+    }
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    await db.execute(
+      `UPDATE users SET password = ? WHERE id = ?`,
+      [hash, userId]
+    );
+
+    res.json({ message: "Password changed successfully" });
+
+  } catch (err) {
+    console.error("CHANGE PASSWORD ERROR:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Upload profile image
+exports.uploadProfileImage = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const imageUrl = req.file?.path || req.body.imageUrl;
+
+    if (!imageUrl) {
+      return res.status(400).json({ message: "No image provided" });
+    }
+
+    await db.execute(
+      `UPDATE employees SET profile_image = ? WHERE user_id = ?`,
+      [imageUrl, userId]
+    );
+
+    res.json({ 
+      message: "Profile image updated",
+      imageUrl 
+    });
+
+  } catch (err) {
+    console.
+    
+    
+    error("UPLOAD IMAGE ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 };

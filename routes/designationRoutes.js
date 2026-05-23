@@ -9,7 +9,7 @@ const {
 } = require("../controllers/designationController");
 
 router.post("/add-designation", addDesignation);
-router.get("/designations", getDesignations);
+router.get("/get", getDesignations);
 router.put("/update-designation", updateDesignation);
 router.delete("/delete-designation", deleteDesignation);
 

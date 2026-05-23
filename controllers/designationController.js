@@ -1,3 +1,5 @@
+const db = require('../config/db');
+
 exports.addDesignation = (req, res) => {
   const { name, status } = req.body;
 
@@ -21,15 +23,21 @@ exports.addDesignation = (req, res) => {
 
 
 
-exports.getDesignations = (req, res) => {
-  db.query(
-    `SELECT * FROM designations WHERE status = 1`,
-    (err, results) => {
-      if (err) return res.status(500).json(err);
+exports.getDesignations = async (req, res) => {
+  try {
+    const [results] = await db.query(
+      `SELECT * FROM designations WHERE status = 1`
+    );
 
-      res.json(results);
-    }
-  );
+    res.json(results);
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch designations",
+      error: err.message,
+    });
+  }
 };
 
 

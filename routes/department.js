@@ -12,6 +12,9 @@ const {
 
 
 router.post("/add-department", addDepartment);
-router.get("/departments", getDepartments);
+router.get("/getall", getDepartments);
 router.put("/update-department", updateDepartment);
 router.delete("/delete-department", deleteDepartment);
+
+
+module.exports = router
