@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const branchController = require('../controllers/branchController');
-const authMiddleware = require('../middleware/authMiddleware');
+const { verifyToken } = require('../middleware/authmiddleware');
 
 
 // Branch routes

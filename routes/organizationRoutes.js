@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const organizationController = require('../controllers/organizationController');
-const authMiddleware = require('../middleware/authMiddleware');
+const { verifyToken } = require('../middleware/authmiddleware');
 const roleMiddleware = require('../middleware/rolemiddleware');
 
 // All routes require authentication
-router.use(authMiddleware.verifyToken);
+router.use(verifyToken);
 
 // Super admin only routes
 router.post('/', 
