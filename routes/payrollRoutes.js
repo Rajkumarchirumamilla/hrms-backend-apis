@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const payrollController = require('../controllers/payrollController');
-const authMiddleware = require('../middleware/authMiddleware');
+const { verifyToken } = require('../middleware/authmiddleware');
 const roleMiddleware = require('../middleware/rolemiddleware');
 const { getAttendanceForPayroll, updateAttendanceForPayroll, bulkUpdateAttendance } = require('../controllers/attendanceController');
 
 // All routes require authentication
-router.use(authMiddleware.verifyToken);
+router.use(verifyToken);
 
 // Payroll batch management
 router.post('/batch/create', 
