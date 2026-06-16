@@ -16,11 +16,13 @@ const {
   autoCheckOut,
   startBreak,
   endBreak,
-  getAttendanceDashboard
+  getAttendanceDashboard,
+  getHRDashboardAttendance
 } = require("../controllers/attendanceController");
 
 
 router.get('/dashboard', verifyToken,getAttendanceDashboard );
+router.get("/hr-dashboard",verifyToken,getHRDashboardAttendance);
 
 // router.post("/check-in", verifyToken, upload.single("image"), checkIn);
 router.post("/check-in", verifyToken,  upload.single("image"),  checkIn);

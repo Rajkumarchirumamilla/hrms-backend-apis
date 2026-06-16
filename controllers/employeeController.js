@@ -33,6 +33,7 @@ exports.getEmployees = async (req, res) => {
         e.employment_type,
         e.work_location,
         e.status,
+        e.grace_period_minutes,
         e.created_at,
         e.updated_at,
 
@@ -163,7 +164,7 @@ exports.getEmployeeById = async (req, res) => {
 };
 
 
-exports.  addEmployee = async (req, res) => {
+exports.addEmployee = async (req, res) => {
   const connection = await db.getConnection();
 
   try {
@@ -184,6 +185,7 @@ exports.  addEmployee = async (req, res) => {
       employment_type,
       work_location,
       status,
+      grace_period_minutes, 
       salary_structure,  // Add this
       leave_balance      // Add this
     } = req.body;
@@ -264,22 +266,24 @@ exports.  addEmployee = async (req, res) => {
         joining_date,
         employment_type,
         work_location,
-        status
+        status,
+         grace_period_minutes
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?)
       `,
       [
         organization_id,
         user_id,
          branch_id ,
         employee_code,
-        department_id || null,
+        department_id || null,  
         designation_id || null,
         reporting_manager_id || null,
         joining_date || null,
         employment_type || "full_time",
         work_location || null,
-        status || "active"
+        status || "active",
+        grace_period_minutes || 0
       ]
     );
 
@@ -391,7 +395,8 @@ exports.updateEmployee = async (req, res) => {
       joining_date,
       employment_type,
       work_location,
-      status
+      status,
+      grace_period_minutes
     } = req.body;
 
     // get employee + linked user
@@ -491,7 +496,8 @@ exports.updateEmployee = async (req, res) => {
         joining_date = ?,
         employment_type = ?,
         work_location = ?,
-        status = ?
+        status = ?,
+        grace_period_minutes = ?
       WHERE id = ?
       `,
       [
@@ -505,6 +511,7 @@ exports.updateEmployee = async (req, res) => {
         employment_type || "full_time",
         work_location || null,
         status || "active",
+        grace_period_minutes || 0,
         id
       ]
     );

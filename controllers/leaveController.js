@@ -85,7 +85,8 @@ exports.getLeaveBalance = async (req, res) => {
 
 // Manager only
 exports.updateLeaveStatus = async (req, res) => {
-  const { leaveId, action } = req.body;
+ const leaveId= req.params.id;
+ const{action}=req.body;  
 
   try {
     // Normalize action (avoid "Approve" vs "approve" issue)
@@ -162,6 +163,71 @@ exports.updateLeaveStatus = async (req, res) => {
         `UPDATE leaves SET status = 'approved' WHERE id = ?`,
         [leaveId]
       );
+
+      // Get employee id
+      // Get employee id
+const [[employee]] = await db.execute(
+`
+SELECT id
+FROM employees
+WHERE user_id = ?
+`,
+[leave.user_id]
+);
+
+if (employee) {
+
+    let currentDate = new Date(leave.start_date);
+    const endDate = new Date(leave.end_date);
+
+    while (currentDate <= endDate) {
+
+        const attendanceDate =
+            currentDate.toISOString().split('T')[0];
+
+        const [[existingAttendance]] = await db.execute(
+        `
+        SELECT id
+        FROM attendance
+        WHERE employee_id = ?
+        AND attendance_date = ?
+        `,
+        [
+            employee.id,
+            attendanceDate
+        ]
+        );
+
+        if (!existingAttendance) {
+
+            await db.execute(
+            `
+            INSERT INTO attendance
+            (
+                employee_id,
+                attendance_date,
+                status
+            )
+            VALUES
+            (
+                ?,
+                ?,
+                'leave'
+            )
+            `,
+            [
+                employee.id,
+                attendanceDate
+            ]
+            );
+
+        }
+
+        currentDate.setDate(
+            currentDate.getDate() + 1
+        );
+    }
+}
 
       // 🔥 STEP 5: ALWAYS reduce annual (main pool)
       await db.execute(
@@ -261,8 +327,6 @@ exports.approveLeave = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
-
 exports.getAllLeaves = async (req, res) => {
   try {
 
@@ -304,4 +368,118 @@ exports.getAllLeaves = async (req, res) => {
     });
 
   }
+};
+exports.editLeave = async (req, res) => {
+
+  const leaveId = req.params.id;
+
+  try {
+
+    const [[leave]] = await db.execute(
+      `
+      SELECT
+      user_id,
+      leave_type,
+      start_date,
+      end_date,
+      status
+      FROM leaves
+      WHERE id=?
+      `,
+      [leaveId]
+    );
+
+    if (!leave) {
+
+      return res.status(404).json({
+        message:"Leave not found"
+      });
+
+    }
+
+    if (leave.status === "pending") {
+
+      return res.json({
+        message:"Already pending"
+      });
+
+    }
+
+    const [[daysResult]] = await db.execute(
+      `
+      SELECT
+      DATEDIFF(?, ?) + 1 AS days
+      `,
+      [leave.end_date, leave.start_date]
+    );
+
+    const days = daysResult.days;
+
+    // Return annual balance
+
+    await db.execute(
+      `
+      UPDATE leave_balances
+      SET annual_used =
+      GREATEST(annual_used - ?,0)
+      WHERE user_id=?
+      `,
+      [days, leave.user_id]
+    );
+
+    // Return leave type balance
+
+    if (leave.leave_type === "casual") {
+
+      await db.execute(
+        `
+        UPDATE leave_balances
+        SET casual_used=
+        GREATEST(casual_used-?,0)
+        WHERE user_id=?
+        `,
+        [days, leave.user_id]
+      );
+
+    }
+
+    if (leave.leave_type === "sick") {
+
+      await db.execute(
+        `
+        UPDATE leave_balances
+        SET sick_used=
+        GREATEST(sick_used-?,0)
+        WHERE user_id=?
+        `,
+        [days, leave.user_id]
+      );
+
+    }
+
+    // Change status back
+
+    await db.execute(
+      `
+      UPDATE leaves
+      SET status='pending'
+      WHERE id=?
+      `,
+      [leaveId]
+    );
+
+    res.json({
+      message:"Leave reverted to pending"
+    });
+
+  } catch(err){
+
+    console.log(err);
+
+    res.status(500).json({
+      error:err.message
+    });
+
+  }
+
 };

@@ -46,7 +46,7 @@ router.get('/:id/stats',
 
 // Add these routes
 router.get('/dashboard-stats/:organizationId', 
-    // roleMiddleware.checkRole(['super_admin', 'org_admin']), 
+    roleMiddleware.checkRole('super_admin', 'org_admin','Hr'), 
     organizationController.getDashboardStats
 );
 

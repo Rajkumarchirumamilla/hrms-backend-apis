@@ -349,11 +349,12 @@ exports.getDashboardStats = async (req, res) => {
     try {
         // Get organization ID from params (supports both 'id' and 'organizationId')
         const organizationId = req.params.id || req.params.organizationId;
+        console.log('organi',organizationId)
         
         if (!organizationId) {
             return res.status(400).json({
                 success: false,
-                message: "Organization ID is required"
+                message: "Organization ID is required" 
             });
         }
         
@@ -373,8 +374,6 @@ exports.getDashboardStats = async (req, res) => {
             FROM salary_structures sd
             INNER JOIN employees e ON sd.employee_id = e.id
             WHERE e.organization_id = ? 
-                AND MONTH(sd.effective_from) = ? 
-                AND YEAR(sd.effective_from) = ?
         `, [organizationId, currentMonth, currentYear]);
         
         // 2. Get employee statistics

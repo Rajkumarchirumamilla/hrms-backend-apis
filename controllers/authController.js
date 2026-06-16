@@ -423,6 +423,124 @@ exports.getProfile = async (req, res) => {
   }
 };    
 
+exports.adminGetProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const token = req.headers.authorization?.split(" ")[1];
+
+    const [users] = await db.execute(
+      `
+      SELECT 
+        u.id,
+        u.name,
+        u.email,
+        u.mobilenumber,
+        u.status,
+
+        r.name AS role,
+
+        e.organization_id,
+        e.address,
+        e.employee_code,
+        e.joining_date,
+        e.employment_type,
+        e.work_location,
+
+        d.name AS department,
+        des.name AS designation,
+
+        manager.name AS manager,
+
+        -- Organization Details
+        org.id AS org_id,
+        org.name AS organization_name,
+        org.email AS organization_email,
+        org.phone AS organization_phone,
+        org.address AS organization_address,
+        org.logo_url AS organization_logourl
+
+      FROM users u
+
+      JOIN user_roles ur 
+        ON u.id = ur.user_id
+
+      JOIN roles r 
+        ON r.id = ur.role_id
+
+      LEFT JOIN employees e 
+        ON e.user_id = u.id
+
+      LEFT JOIN departments d
+        ON d.id = e.department_id
+
+      LEFT JOIN designations des
+        ON des.id = e.designation_id
+
+      LEFT JOIN employees rm
+        ON rm.id = e.reporting_manager_id
+
+      LEFT JOIN users manager
+        ON manager.id = rm.user_id
+
+      LEFT JOIN organizations org
+        ON org.id = e.organization_id
+
+      WHERE u.id = ?
+      `,
+      [userId]
+    );
+
+    if (!users.length) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    const user = users[0];
+
+    res.json({
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        mobilenumber: user.mobilenumber,
+        status: user.status,
+        role: user.role,
+        address: user.address,
+      },
+
+      employee: {
+        department: user.department,
+        designation: user.designation,
+        employeeId: user.employee_code,
+        organization_id: user.organization_id,
+        joiningDate: user.joining_date,
+        manager: user.manager,
+        employmentType: user.employment_type,
+        workLocation: user.work_location,
+      },
+
+      organization: {
+        id: user.org_id,
+        name: user.organization_name,
+        email: user.organization_email,
+        phone: user.organization_phone,
+        address: user.organization_address,
+        logourl:user.organization_logourl
+      },
+
+      token,
+    });
+  } catch (err) {
+    console.error("GET PROFILE ERROR:", err);
+
+    res.status(500).json({
+      error: err.message,
+    });
+  }
+};
+
 exports.getDashboardStats = async (req, res) => {
   try {
     const userId = req.user.id;

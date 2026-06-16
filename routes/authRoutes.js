@@ -7,6 +7,7 @@ router.post('/login', auth.login);
 router.post("/send-otp", auth.sendOtp);
 router.post("/reset-password", auth.resetPassword);
 router.get("/profile", verifyToken, auth.getProfile);
+router.get('/admin/profile',verifyToken,auth.adminGetProfile)
 router.get("/dashboard-stats",verifyToken, auth.getDashboardStats);
 
 router.put('/update', verifyToken, auth.updateProfile);

@@ -66,6 +66,7 @@ AND e.status='active'`,
 );
 
 console.log('emp',employees)
+console.log('Employee Count:', employees.length);
 
         // Add each employee to payroll batch
        for (const emp of employees) {
@@ -94,10 +95,83 @@ console.log('emp',employees)
         healthInsurance +
         professionalTax;
 
-    const netSalary =
-        grossSalary - totalDeductions;
+        const monthMap = {
+    January: 1,
+    February: 2,
+    March: 3,
+    April: 4,
+    May: 5,
+    June: 6,
+    July: 7,
+    August: 8,
+    September: 9,
+    October: 10,
+    November: 11,
+    December: 12
+};
 
-    await db.query(
+const monthNum = monthMap[month];
+const yearNum = Number(year);
+
+const [[attendanceSummary]] = await db.query(
+`
+SELECT
+    SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) AS present_days,
+    SUM(CASE WHEN status = 'leave' THEN 1 ELSE 0 END) AS leave_days
+FROM attendance
+WHERE employee_id = ?
+AND MONTH(attendance_date) = ?
+AND YEAR(attendance_date) = ?
+`,
+[
+    emp.id,
+    monthNum,
+    yearNum
+]
+);
+
+const presentDays = Number(attendanceSummary?.present_days || 0);
+const leaveDays = Number(attendanceSummary?.leave_days || 0);
+
+const daysInMonth = new Date(yearNum, monthNum, 0).getDate();
+
+const lopDays =
+    daysInMonth -
+    presentDays -
+    leaveDays;
+
+const dailySalary =
+    grossSalary / daysInMonth;
+
+const lopAmount =
+    Number((lopDays * dailySalary).toFixed(2));
+
+const netSalary =
+    Number(
+        (
+            grossSalary -
+            totalDeductions -
+            lopAmount
+        ).toFixed(2)
+    );
+
+
+
+console.log({
+    employee: emp.id,
+    presentDays,
+    leaveDays,
+    daysInMonth,
+    lopDays,
+    dailySalary,
+    lopAmount,
+    netSalary
+});
+
+console.log("Before Insert", emp.id);
+
+
+   const [result] = await db.query(
         `INSERT INTO payroll_employees
         (
             payroll_batch_id,
@@ -113,10 +187,12 @@ console.log('emp',employees)
             health_insurance,
             professional_tax,
             total_deductions,
+            lop_days,
+            loss_of_pay,
             net_salary,
             status
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?, 'pending')`,
         [
             batchId,
             emp.id,
@@ -131,9 +207,13 @@ console.log('emp',employees)
             healthInsurance,
             professionalTax,
             totalDeductions,
+             lopDays,
+             lopAmount,
             netSalary
         ]
     );
+    console.log("Inserted", emp.id, result.insertId);
+    
 }
         // Log step
         await db.query(
@@ -168,7 +248,7 @@ exports.getPayrollBatches = async (req, res) => {
                     SUM(CASE WHEN pe.status = 'approved' THEN 1 ELSE 0 END) as approved_count,
                     SUM(CASE WHEN pe.status = 'paid' THEN 1 ELSE 0 END) as paid_count
              FROM payroll_batches pb
-             JOIN branches b ON pb.branch_id = b.id
+             JOIN branches b ON pb  .branch_id = b.id
              LEFT JOIN payroll_employees pe ON pb.id = pe.payroll_batch_id
              WHERE pb.organization_id = ?
              GROUP BY pb.id
@@ -187,60 +267,81 @@ exports.getPayrollBatches = async (req, res) => {
 // GET PAYROLL BATCH DETAILS
 // ============================================
 exports.getPayrollBatchDetails = async (req, res) => {
+    console.log('batch id');
+
     const { batchId } = req.params;
 
     try {
         // Get batch info
         const [batch] = await db.query(
-            `SELECT pb.*, b.branch_name as branch_name,
-                    CONCAT(u.first_name, ' ', u.last_name) as processed_by_name
+            `SELECT 
+                pb.*, 
+                b.branch_name,
+                CONCAT(u.first_name, ' ', u.last_name) AS processed_by_name
              FROM payroll_batches pb
-             JOIN branches b ON pb.branch_id = b.id
-             LEFT JOIN users u ON pb.processed_by = u.id
+             JOIN branches b
+                ON pb.branch_id = b.id
+             LEFT JOIN users u
+                ON pb.processed_by = u.id
              WHERE pb.id = ?`,
             [batchId]
         );
 
         if (batch.length === 0) {
-            return res.status(404).json({ success: false, message: 'Batch not found' });
+            return res.status(404).json({
+                success: false,
+                message: 'Batch not found'
+            });
         }
 
+        // Get employees with bank details
         const [employees] = await db.query(
-`SELECT 
-        pe.*,
+            `SELECT
+                pe.*,
 
-        u.name as employee_name,
+                u.name AS employee_name,
 
-        e.employee_code,
+                e.id AS employee_id,
+                e.employee_code,
 
-        des.name as designation_name,
+                des.name AS designation_name,
 
-        d.name as department_name
+                d.name AS department_name,
 
-FROM payroll_employees pe
+                COALESCE(ss.bank_name, '') AS bank_name,
+                COALESCE(ss.account_number, '') AS account_number,
+                COALESCE(ss.ifsc_code, '') AS ifsc_code
 
-JOIN employees e
-ON pe.employee_id = e.id
+            FROM payroll_employees pe
 
-JOIN users u
-ON e.user_id = u.id
+            JOIN employees e
+                ON pe.employee_id = e.id
 
-LEFT JOIN departments d
-ON e.department_id = d.id
+            JOIN users u
+                ON e.user_id = u.id
 
-LEFT JOIN designations des
-ON e.designation_id = des.id
+            LEFT JOIN departments d
+                ON e.department_id = d.id
 
-WHERE pe.payroll_batch_id = ?
+            LEFT JOIN designations des
+                ON e.designation_id = des.id
 
-ORDER BY u.name`,
-[batchId]
-);
+            LEFT JOIN salary_structures ss
+                ON ss.employee_id = e.id
+
+            WHERE pe.payroll_batch_id = ?
+
+            ORDER BY u.name`,
+            [batchId]
+        );
+
+        console.log('Employees with bank details:', employees);
 
         // Get step logs
         const [logs] = await db.query(
-            `SELECT * FROM payroll_step_logs 
-             WHERE payroll_batch_id = ? 
+            `SELECT *
+             FROM payroll_step_logs
+             WHERE payroll_batch_id = ?
              ORDER BY created_at`,
             [batchId]
         );
@@ -249,13 +350,18 @@ ORDER BY u.name`,
             success: true,
             data: {
                 batch: batch[0],
-                employees: employees,
-                logs: logs
+                employees,
+                logs
             }
         });
+
     } catch (error) {
         console.error('Error fetching batch details:', error);
-        res.status(500).json({ success: false, message: error.message });
+
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
     }
 };
 
@@ -823,7 +929,7 @@ exports.getPayrollStepData = async (req, res) => {
         console.error('Error fetching step data:', error);
         res.status(500).json({ success: false, message: error.message });
     }
-};
+};  
 
 // ============================================
 // UPDATE EMPLOYEE COMPENSATION
