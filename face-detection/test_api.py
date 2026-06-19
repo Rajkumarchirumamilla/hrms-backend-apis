@@ -8,7 +8,7 @@ def test_face_detection():
     print("Testing Face Detection API...")
     
     # Test health endpoint
-    response = requests.get('http://localhost:5001/health')
+    response = requests.get('https://facerecognization.sltechnocrats.net/health')
     print(f"Health check: {response.json()}")
     
     print("\n✅ Python service is running correctly!")
