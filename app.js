@@ -34,6 +34,13 @@ app.use('/api/face', require('./routes/faceDetectionRoutes'));
 app.use('/api/organizations',require('./routes/organizationRoutes'))
 app.use('/api/payroll',require('./routes/payrollRoutes'))
 
+app.get('/api', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'API is running successfully'
+  });
+});
+
 
 
 const PORT = process.env.PORT || 5000;
