@@ -183,7 +183,7 @@ exports.login = async (req, res) => {
         expiresIn: "1d"
       }
     );
-
+    console.log(process.env.JWT_SECRET)
     res.json({
       message: "Login successful",
 
