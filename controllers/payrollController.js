@@ -1320,3 +1320,452 @@ exports.downloadPayrollReport = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+
+
+exports.getEmployeePayslips = async (req, res) => {
+    const { employeeId } = req.params;
+    const { month, year } = req.query;
+
+    try {
+        let currentPayslip = null;
+        let previousPayslips = [];
+        let earnings = [];
+        let deductions = [];
+        let summary = {
+            totalEarnings: 0,
+            totalDeductions: 0,
+            netSalary: 0
+        };
+
+        if (month && year) {
+            // Get payslip for specific month/year - Fixed: using generated_at instead of created_at
+            const [payslipResult] = await db.query(
+                `SELECT 
+                    p.id,
+                    p.month,
+                    p.year,
+                    p.net_salary as amount,
+                    p.status,
+                    p.employee_id,
+                    p.generated_at,
+                    p.gross_salary,
+                    p.total_earnings,
+                    p.total_deductions,
+                    p.basic_salary,
+                    p.hra,
+                    p.da,
+                    p.conveyance_allowance,
+                    p.medical_allowance,
+                    p.special_allowance,
+                    p.income_tax,
+                    p.provident_fund,
+                    p.health_insurance,
+                    p.professional_tax,
+                    p.loan_deduction,
+                    p.lop_days,
+                    p.loss_of_pay,
+                    p.paid_days
+                 FROM payslips p
+                 WHERE p.employee_id = ? 
+                 AND p.month = ? 
+                 AND p.year = ?
+                 ORDER BY p.generated_at DESC
+                 LIMIT 1`,
+                [employeeId, month, year]
+            );
+
+            if (payslipResult.length > 0) {
+                currentPayslip = payslipResult[0];
+                
+                // Build earnings from payslip data
+                earnings = [];
+                if (currentPayslip.basic_salary > 0) {
+                    earnings.push({
+                        id: Math.random(),
+                        name: 'Basic Salary',
+                        amount: parseFloat(currentPayslip.basic_salary) || 0,
+                        icon: '💰',
+                        type: 'earning'
+                    });
+                }
+                if (currentPayslip.hra > 0) {
+                    earnings.push({
+                        id: Math.random(),
+                        name: 'HRA',
+                        amount: parseFloat(currentPayslip.hra) || 0,
+                        icon: '🏠',
+                        type: 'earning'
+                    });
+                }
+                if (currentPayslip.da > 0) {
+                    earnings.push({
+                        id: Math.random(),
+                        name: 'DA',
+                        amount: parseFloat(currentPayslip.da) || 0,
+                        icon: '📊',
+                        type: 'earning'
+                    });
+                }
+                if (currentPayslip.conveyance_allowance > 0) {
+                    earnings.push({
+                        id: Math.random(),
+                        name: 'Conveyance Allowance',
+                        amount: parseFloat(currentPayslip.conveyance_allowance) || 0,
+                        icon: '🚗',
+                        type: 'earning'
+                    });
+                }
+                if (currentPayslip.medical_allowance > 0) {
+                    earnings.push({
+                        id: Math.random(),
+                        name: 'Medical Allowance',
+                        amount: parseFloat(currentPayslip.medical_allowance) || 0,
+                        icon: '🏥',
+                        type: 'earning'
+                    });
+                }
+                if (currentPayslip.special_allowance > 0) {
+                    earnings.push({
+                        id: Math.random(),
+                        name: 'Special Allowance',
+                        amount: parseFloat(currentPayslip.special_allowance) || 0,
+                        icon: '⭐',
+                        type: 'earning'
+                    });
+                }
+
+                // Build deductions from payslip data
+                deductions = [];
+                if (currentPayslip.income_tax > 0) {
+                    deductions.push({
+                        id: Math.random(),
+                        name: 'Income Tax',
+                        amount: parseFloat(currentPayslip.income_tax) || 0,
+                        icon: '📋',
+                        type: 'deduction'
+                    });
+                }
+                if (currentPayslip.provident_fund > 0) {
+                    deductions.push({
+                        id: Math.random(),
+                        name: 'Provident Fund',
+                        amount: parseFloat(currentPayslip.provident_fund) || 0,
+                        icon: '🏦',
+                        type: 'deduction'
+                    });
+                }
+                if (currentPayslip.health_insurance > 0) {
+                    deductions.push({
+                        id: Math.random(),
+                        name: 'Health Insurance',
+                        amount: parseFloat(currentPayslip.health_insurance) || 0,
+                        icon: '❤️',
+                        type: 'deduction'
+                    });
+                }
+                if (currentPayslip.professional_tax > 0) {
+                    deductions.push({
+                        id: Math.random(),
+                        name: 'Professional Tax',
+                        amount: parseFloat(currentPayslip.professional_tax) || 0,
+                        icon: '📄',
+                        type: 'deduction'
+                    });
+                }
+                if (currentPayslip.loan_deduction > 0) {
+                    deductions.push({
+                        id: Math.random(),
+                        name: 'Loan Deduction',
+                        amount: parseFloat(currentPayslip.loan_deduction) || 0,
+                        icon: '🏦',
+                        type: 'deduction'
+                    });
+                }
+                if (currentPayslip.loss_of_pay > 0) {
+                    deductions.push({
+                        id: Math.random(),
+                        name: 'Loss of Pay',
+                        amount: parseFloat(currentPayslip.loss_of_pay) || 0,
+                        icon: '⚠️',
+                        type: 'deduction'
+                    });
+                }
+
+                // Get previous payslips
+                [previousPayslips] = await db.query(
+                    `SELECT 
+                        id,
+                        month,
+                        year,
+                        net_salary as amount,
+                        status,
+                        employee_id,
+                        generated_at
+                     FROM payslips
+                     WHERE employee_id = ? 
+                     AND NOT (month = ? AND year = ?)
+                     ORDER BY year DESC, 
+                         FIELD(month, 'January','February','March','April','May','June','July','August','September','October','November','December') DESC
+                     LIMIT 12`,
+                    [employeeId, month, year]
+                );
+
+                summary = {
+                    totalEarnings: currentPayslip.total_earnings || 0,
+                    totalDeductions: currentPayslip.total_deductions || 0,
+                    netSalary: currentPayslip.net_salary || 0
+                };
+            }
+        } else {
+            // Get latest payslip
+            const [latestPayslip] = await db.query(
+                `SELECT 
+                    p.id,
+                    p.month,
+                    p.year,
+                    p.net_salary as amount,
+                    p.status,
+                    p.employee_id,
+                    p.generated_at,
+                    p.gross_salary,
+                    p.total_earnings,
+                    p.total_deductions,
+                    p.basic_salary,
+                    p.hra,
+                    p.da,
+                    p.conveyance_allowance,
+                    p.medical_allowance,
+                    p.special_allowance,
+                    p.income_tax,
+                    p.provident_fund,
+                    p.health_insurance,
+                    p.professional_tax,
+                    p.loan_deduction,
+                    p.lop_days,
+                    p.loss_of_pay,
+                    p.paid_days
+                 FROM payslips p
+                 WHERE p.employee_id = ?
+                 ORDER BY p.generated_at DESC
+                 LIMIT 1`,
+                [employeeId]
+            );
+
+            if (latestPayslip.length > 0) {
+                currentPayslip = latestPayslip[0];
+                
+                // Build earnings from payslip data
+                earnings = [];
+                if (currentPayslip.basic_salary > 0) {
+                    earnings.push({
+                        id: Math.random(),
+                        name: 'Basic Salary',
+                        amount: parseFloat(currentPayslip.basic_salary) || 0,
+                        icon: '💰',
+                        type: 'earning'
+                    });
+                }
+                if (currentPayslip.hra > 0) {
+                    earnings.push({
+                        id: Math.random(),
+                        name: 'HRA',
+                        amount: parseFloat(currentPayslip.hra) || 0,
+                        icon: '🏠',
+                        type: 'earning'
+                    });
+                }
+                if (currentPayslip.da > 0) {
+                    earnings.push({
+                        id: Math.random(),
+                        name: 'DA',
+                        amount: parseFloat(currentPayslip.da) || 0,
+                        icon: '📊',
+                        type: 'earning'
+                    });
+                }
+                if (currentPayslip.conveyance_allowance > 0) {
+                    earnings.push({
+                        id: Math.random(),
+                        name: 'Conveyance Allowance',
+                        amount: parseFloat(currentPayslip.conveyance_allowance) || 0,
+                        icon: '🚗',
+                        type: 'earning'
+                    });
+                }
+                if (currentPayslip.medical_allowance > 0) {
+                    earnings.push({
+                        id: Math.random(),
+                        name: 'Medical Allowance',
+                        amount: parseFloat(currentPayslip.medical_allowance) || 0,
+                        icon: '🏥',
+                        type: 'earning'
+                    });
+                }
+                if (currentPayslip.special_allowance > 0) {
+                    earnings.push({
+                        id: Math.random(),
+                        name: 'Special Allowance',
+                        amount: parseFloat(currentPayslip.special_allowance) || 0,
+                        icon: '⭐',
+                        type: 'earning'
+                    });
+                }
+
+                // Build deductions from payslip data
+                deductions = [];
+                if (currentPayslip.income_tax > 0) {
+                    deductions.push({
+                        id: Math.random(),
+                        name: 'Income Tax',
+                        amount: parseFloat(currentPayslip.income_tax) || 0,
+                        icon: '📋',
+                        type: 'deduction'
+                    });
+                }
+                if (currentPayslip.provident_fund > 0) {
+                    deductions.push({
+                        id: Math.random(),
+                        name: 'Provident Fund',
+                        amount: parseFloat(currentPayslip.provident_fund) || 0,
+                        icon: '🏦',
+                        type: 'deduction'
+                    });
+                }
+                if (currentPayslip.health_insurance > 0) {
+                    deductions.push({
+                        id: Math.random(),
+                        name: 'Health Insurance',
+                        amount: parseFloat(currentPayslip.health_insurance) || 0,
+                        icon: '❤️',
+                        type: 'deduction'
+                    });
+                }
+                if (currentPayslip.professional_tax > 0) {
+                    deductions.push({
+                        id: Math.random(),
+                        name: 'Professional Tax',
+                        amount: parseFloat(currentPayslip.professional_tax) || 0,
+                        icon: '📄',
+                        type: 'deduction'
+                    });
+                }
+                if (currentPayslip.loan_deduction > 0) {
+                    deductions.push({
+                        id: Math.random(),
+                        name: 'Loan Deduction',
+                        amount: parseFloat(currentPayslip.loan_deduction) || 0,
+                        icon: '🏦',
+                        type: 'deduction'
+                    });
+                }
+                if (currentPayslip.loss_of_pay > 0) {
+                    deductions.push({
+                        id: Math.random(),
+                        name: 'Loss of Pay',
+                        amount: parseFloat(currentPayslip.loss_of_pay) || 0,
+                        icon: '⚠️',
+                        type: 'deduction'
+                    });
+                }
+
+                // Get previous payslips
+                [previousPayslips] = await db.query(
+                    `SELECT 
+                        id,
+                        month,
+                        year,
+                        net_salary as amount,
+                        status,
+                        employee_id,
+                        generated_at
+                     FROM payslips
+                     WHERE employee_id = ? 
+                     AND NOT (month = ? AND year = ?)
+                     ORDER BY year DESC, 
+                         FIELD(month, 'January','February','March','April','May','June','July','August','September','October','November','December') DESC
+                     LIMIT 12`,
+                    [employeeId, currentPayslip.month, currentPayslip.year]
+                );
+
+                summary = {
+                    totalEarnings: currentPayslip.total_earnings || 0,
+                    totalDeductions: currentPayslip.total_deductions || 0,
+                    netSalary: currentPayslip.net_salary || 0
+                };
+            }
+        }
+
+        if (!currentPayslip) {
+            return res.json({
+                success: true,
+                data: {
+                    currentPayslip: null,
+                    previousPayslips: [],
+                    earnings: [],
+                    deductions: [],
+                    summary: {
+                        totalEarnings: 0,
+                        totalDeductions: 0,
+                        netSalary: 0
+                    }
+                }
+            });
+        }
+
+        const response = {
+            currentPayslip: {
+                id: currentPayslip.id,
+                month: `${currentPayslip.month} ${currentPayslip.year}`,
+                amount: parseFloat(currentPayslip.amount) || 0,
+                status: currentPayslip.status || 'Generated',
+                employee_id: currentPayslip.employee_id,
+                generated_at: currentPayslip.generated_at,
+                gross_salary: currentPayslip.gross_salary || 0
+            },
+            previousPayslips: previousPayslips.map(p => ({
+                id: p.id,
+                month: `${p.month} ${p.year}`,
+                amount: parseFloat(p.amount) || 0,
+                status: p.status || 'Generated',
+                employee_id: p.employee_id,
+                generated_at: p.generated_at
+            })),
+            earnings: earnings.length > 0 ? earnings : [
+                {
+                    id: 1,
+                    name: 'No Earnings Data',
+                    amount: 0,
+                    icon: '📭',
+                    type: 'earning'
+                }
+            ],
+            deductions: deductions.length > 0 ? deductions : [
+                {
+                    id: 1,
+                    name: 'No Deductions Data',
+                    amount: 0,
+                    icon: '📭',
+                    type: 'deduction'
+                }
+            ],
+            summary: {
+                totalEarnings: parseFloat(summary.totalEarnings) || 0,
+                totalDeductions: parseFloat(summary.totalDeductions) || 0,
+                netSalary: parseFloat(summary.netSalary) || 0
+            }
+        };
+
+        res.json({
+            success: true,
+            data: response
+        });
+
+    } catch (error) {
+        console.error('Error getting employee payslips:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};

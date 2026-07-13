@@ -9,7 +9,6 @@
        "face": "python app.py",
     "start": "nodemon app.js",
     "dev": "concurrently \"npm run server\" \"npm run python\""
-
   },
   "keywords": [],
   "author": "",

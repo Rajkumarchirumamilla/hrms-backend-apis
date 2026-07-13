@@ -91,4 +91,8 @@ router.get('/batch/:batchId/download',
     payrollController.downloadPayrollReport
 );
 
-module.exports = router;
+
+// Get employee payslips
+router.get('/payroll/:employeeId', verifyToken, payrollController.getEmployeePayslips);
+
+module.exports = router;    

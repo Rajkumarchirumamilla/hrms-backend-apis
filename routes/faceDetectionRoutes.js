@@ -5,7 +5,7 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 
-const PYTHON_SERVICE_URL = 'https://hrms-facedetection.onrender.com';
+const PYTHON_SERVICE_URL = 'https://facerecognization.sltechnocrats.net';
 
 // ─── POST /api/face/detect-face ───────────────────────────────────────────────
 // Called continuously by the mobile app (every ~800ms) while the camera is open.
