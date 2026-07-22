@@ -31,6 +31,37 @@ exports.applyLeave = async (req, res) => {
        VALUES (?, ?, ?, ?, ?, 'pending')`,
       [user_id, leave_type, start_date, end_date, reason || '']
     );
+const [[admin]] = await db.execute(
+  `SELECT id
+   FROM users
+   WHERE role = 'org_admin'
+   LIMIT 1`
+);
+
+if (admin) {
+  await db.execute(
+    `INSERT INTO notifications
+    (
+      sender_id,
+      receiver_id,
+      title,
+      message,
+      type,
+      reference_id,
+      reference_type
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      user_id,
+      admin.id,
+      "New Leave Request",
+      "A new leave request has been submitted.",
+      "leave_request",
+      result.insertId,
+      "leave"
+    ]
+  );
+}
 
     res.status(201).json({ 
       message: "Leave applied successfully", 
@@ -119,6 +150,28 @@ exports.updateLeaveStatus = async (req, res) => {
         `UPDATE leaves SET status = 'rejected' WHERE id = ?`,
         [leaveId]
       );
+      await db.execute(
+  `INSERT INTO notifications
+  (
+    sender_id,
+    receiver_id,
+    title,
+    message,
+    type,
+    reference_id,
+    reference_type
+  )
+  VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  [
+    req.user.id,
+    leave.user_id,
+    "Leave Rejected",
+`${leave.leave_type} leave from ${leave.start_date} to ${leave.end_date} has been rejected.`  ,
+  "leave_rejected",
+    leaveId,
+    "leave"
+  ]
+);
 
       return res.json({ message: "Leave rejected" });
     }
@@ -163,6 +216,28 @@ exports.updateLeaveStatus = async (req, res) => {
         `UPDATE leaves SET status = 'approved' WHERE id = ?`,
         [leaveId]
       );
+      await db.execute(
+  `INSERT INTO notifications
+  (
+    sender_id,
+    receiver_id,
+    title,
+    message,
+    type,
+    reference_id,
+    reference_type
+  )
+  VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  [
+    req.user.id,
+    leave.user_id,
+    "Leave Approved",
+    `${leave.leave_type} leave from ${leave.start_date} to ${leave.end_date} has been approved.`,
+    "leave_approved",
+    leaveId,
+    "leave"
+  ]
+);
 
       // Get employee id
       // Get employee id
