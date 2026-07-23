@@ -1,7 +1,7 @@
 require("./config/db");
 require("dotenv").config();
-require("./routes/attendanceRoutes");
-require("./routes/notificationRoutes")
+// require("./routes/attendanceRoutes");
+// require("./routes/notificationRoutes")
 const cors = require('cors');
 
 
@@ -35,7 +35,7 @@ app.use('/api/branches',require('./routes/branchRoutes'))
 app.use('/api/face', require('./routes/faceDetectionRoutes'));
 app.use('/api/organizations',require('./routes/organizationRoutes'))
 app.use('/api/payroll',require('./routes/payrollRoutes'))
-app.use("/api/notifications", notificationRoutes);
+app.use("/api/notifications", require('./routes/notificationRoutes'));
 
 app.get('/api', (req, res) => {
   res.status(200).json({

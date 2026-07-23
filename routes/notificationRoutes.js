@@ -1,41 +1,17 @@
-const db = require("../config/db");
+const express = require("express");
+const router = express.Router();
 
-exports.getNotifications = async (req, res) => {
-  try {
-    const userId = req.user.id;
+const {
+  getNotifications,
+  markAsRead,
+} = require("../controllers/notificationController");
 
-    const [rows] = await db.execute(
-      `SELECT *
-       FROM notifications
-       WHERE receiver_id = ?
-       ORDER BY created_at DESC`,
-      [userId]
-    );
+const { verifyToken } = require("../middleware/authmiddleware");
 
-    res.json(rows);
+// Get all notifications for logged-in user
+router.get("/", verifyToken, getNotifications);
 
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-};
+// Mark a notification as read
+router.put("/:id/read", verifyToken, markAsRead);
 
-exports.markAsRead = async (req, res) => {
-  try {
-
-    await db.execute(
-      `UPDATE notifications
-       SET is_read = 1
-       WHERE id = ?`,
-      [req.params.id]
-    );
-
-    res.json({
-      message: "Notification marked as read"
-    });
-
-  } catch (err) {
-    res.status(500).json({
-      error: err.message
-    });
-  }
-};
+module.exports = router;
